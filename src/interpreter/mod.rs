@@ -182,26 +182,6 @@ impl MyInterpreter {
                         self.display[y_coord][x_coord] = res;
                     }
                 }
-
-                // while i < n.val() && y < last_y {
-                //     let bits = self.memory[i as usize];
-                //     for j in 0..8 {
-                //         let y = y as usize;
-                //         let x = (x + j) as usize;
-
-                //         let px = self.display[x][y];
-                //         let res = bit_at(bits, j) ^ (bool::from(px));
-                //         self.display[x][y] = if res {
-                //             Pixel::Black
-                //         } else {
-                //             self.reg_general[0xF] = 1;
-                //             Pixel::White
-                //         };
-                //         info!("Pixel[{}][{}] = {:?}", x, y, self.display[x][y]);
-                //         i += 1;
-                //     }
-                //     y += 1;
-                // }
             }
         }
         Some(self.display)
