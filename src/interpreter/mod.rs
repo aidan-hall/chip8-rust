@@ -39,7 +39,7 @@ impl Nibble {
     }
 
     fn byte(hi: Nibble, lo: Nibble) -> u8 {
-        ((hi.val() << 4) as u8) & ((lo.val()) as u8)
+        (hi.val() << 4) + lo.val()
     }
 }
 
@@ -98,12 +98,12 @@ impl MyInterpreter {
         }
     }
     fn fetch(&mut self) -> (u8, u8) {
-	info!("PC: {}", self.pc);
+        info!("PC: {}", self.pc);
         let instruction = (
             self.memory[self.pc as usize],
             self.memory[self.pc as usize + 1],
         );
-        info!("Instruction: {}, {}", instruction.0, instruction.1);
+        info!("Instruction: {:#02X} {:#02X}", instruction.0, instruction.1);
         self.pc += 2;
         instruction
     }
@@ -127,8 +127,8 @@ impl MyInterpreter {
                 _ => unimplemented!(),
             },
             1 => Jump(Datum::from_nibbles(n1, n2, n3).expect("Fine")),
-            6 => Load(n1.val() as Address, Nibble::byte(n2, n3)),
-            7 => Add(n1.val() as Address, Nibble::byte(n2, n3)),
+            6 => Load(n1.val() as Address, bytes.1),
+            7 => Add(n1.val() as Address, bytes.1),
             0xA => SetIndex(Datum::from_nibbles(n1, n2, n3).expect("Fine")),
             0xD => Draw(n1, n2, n3),
             _ => unimplemented!(),
@@ -139,51 +139,69 @@ impl MyInterpreter {
         info!("Executing: {:?}", instruction);
         use Instruction::*;
         match instruction {
-            Nop => {
-                info!("No Op");
-            }
+            Nop => {}
             ClearScreen => {
-                info!("Clearing display...");
                 self.display = [[Pixel::Black; 64]; 32];
             }
             Jump(d) => {
                 self.pc = d.val();
-                info!("Jumped to {}", self.pc);
             }
             Load(reg, val) => {
                 self.reg_general[reg as usize] = val;
             }
             Add(reg, val) => {
-                self.reg_general[reg as usize] += val;
+                self.reg_general[reg as usize] = self.reg_general[reg as usize].wrapping_add(val);
             }
             SetIndex(val) => {
                 self.index = val.val();
             }
             Draw(x, y, n) => {
-                let x = self.reg_general[x.val() as usize] % 64;
-                let mut y = self.reg_general[y.val() as usize] % 32;
-		let last_y = y + n.val() / 8;
+                let x = self.reg_general[x.val() as usize];
+                let y = self.reg_general[y.val() as usize];
+                info!("Index: 0x{:04X}, x: {}, y: {}", self.index, x, y);
+                let last_y = y + n.val() / 8;
                 self.reg_general[0xF] = 0;
 
-                let mut i = 0;
-                while i < n.val() && y < last_y {
-                    let bits = self.memory[i as usize];
+                for i in 0..n.val() {
+                    let row = self.memory[(self.index as usize) + (i as usize)];
+                    info!("Drawing row: {:08b}", row);
                     for j in 0..8 {
-                        let y = y as usize;
-                        let x = (x + j) as usize;
-
-			let px = self.display[y][x];
-			let res = bit_at(bits, j) ^ (bool::from(px));
-			self.display[y][x] = if res {
-			    Pixel::Black
-			} else {
-			    self.reg_general[0xF] = 1;
-			    Pixel::White
-			};
-			info!("Pixel[{}][{}] = {:?}", y, x, self.display[y][x]);
+                        let y_coord = ((y + i) % 32) as usize;
+                        let x_coord = ((x + j) % 64) as usize;
+                        let px = self.display[y_coord][x_coord];
+                        let bit_px = if bit_at(row, 7 - j) {
+                            Pixel::White
+                        } else {
+                            Pixel::Black
+                        };
+                        let res = px ^ bit_px;
+                        if res == Pixel::Black {
+                            self.reg_general[0xF] = 1;
+                        }
+                        info!("Pixel[{}][{}] = {:?}", y_coord, x_coord, res);
+                        self.display[y_coord][x_coord] = res;
                     }
-                    y += 1;
                 }
+
+                // while i < n.val() && y < last_y {
+                //     let bits = self.memory[i as usize];
+                //     for j in 0..8 {
+                //         let y = y as usize;
+                //         let x = (x + j) as usize;
+
+                //         let px = self.display[x][y];
+                //         let res = bit_at(bits, j) ^ (bool::from(px));
+                //         self.display[x][y] = if res {
+                //             Pixel::Black
+                //         } else {
+                //             self.reg_general[0xF] = 1;
+                //             Pixel::White
+                //         };
+                //         info!("Pixel[{}][{}] = {:?}", x, y, self.display[x][y]);
+                //         i += 1;
+                //     }
+                //     y += 1;
+                // }
             }
         }
         Some(self.display)
